@@ -4,15 +4,14 @@ from keras.layers.wrappers import TimeDistributed
 from keras.layers.recurrent import LSTM
 
 # shape(sameple_size,sample_row,sample_column)
-def create_lstm_network(num_frequency_vectores, num_frequency_dimensions, num_hidden_dimensions, num_recurrent_units=1):
+def create_lstm_network(samples, features, num_recurrent_units=1):
 
-    # create sequential
     model = Sequential()
 
     #This layer converts frequency space to hidden space
     # http://keras-cn.readthedocs.io/en/latest/layers/core_layer/
     # http://keras-cn.readthedocs.io/en/latest/layers/wrapper/
-    model.add(TimeDistributed(Dense(num_hidden_dimensions),input_shape=(num_frequency_vectores,num_frequency_dimensions)))
+    model.add(TimeDistributed(input_shape=(num_frequency_vectores,num_frequency_dimensions)))
 
     for cur_unit in range(num_recurrent_units):
         model.add(LSTM(input_dim=num_hidden_dimensions, output_dim=num_hidden_dimensions, return_sequences=True))

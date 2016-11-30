@@ -1,17 +1,16 @@
 from utils import parser
-import config
+import numpy as np
+import mido
 import os
 
-
-conf = config.config()
-sampling_freq = conf['sampling_freq']
-sampling_block_size = conf['sampling_block_size']
-max_seq_length = conf['max_seq_length']
-
-path_to_audio_source = os.getcwd() + '/audio_sources'
-file = parser.find_all_the_mp3(path_to_audio_source+'/mp3')
-for n in file:
-    parser.convert_mp3_to_wav(n,sampling_freq)
+# mid = mido.MidiFile('1.mid')
 
 
-parser.convert_wav_files_to_nptensor(sampling_block_size,max_seq_length,'test')
+path = os.getcwd()+'/audio_resources'
+#midi_files  = parser.find_midi_path(path)
+
+#for n in midi_files:
+    #print(parser.midi_to_single_array(n).shape)
+
+a = parser.convert_array_to_nptensor(path)
+print(a[0][0])
