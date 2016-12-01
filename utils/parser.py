@@ -71,9 +71,34 @@ def midi_to_single_array1(midi):
 
 
 
+def midi_to_single_array2(midi):
+    pitch = {}
+    message = np.zeros([1,4])
+    sequence = []
+    for n in midi:
+        if n.type == 'pitchwheel':
+            pitch[n.channel] = n.pitch
+        elif n.type in ['note_off','note_on']:
+            #print(n.note,n.time,pitch[n.channel],n.velocity)
+            ls = message.copy()
+            if n.type == 'note_on':
+                ls[0] = [n.note, n.time, n.velocity, pitch[n.channel]]
+            else:
+                ls[0] = [n.note, n.time, 0, pitch[n.channel]]
+            if sequence == []:
+                sequence = ls.reshape([1,1,4])
+            else:
+                sequence = np.append(sequence,ls.reshape([1,1,4]),axis=0)
+    return sequence
+
+
 
 # To do
 # Seperate different tracks into different array
+
+
+
+
 def convert_array_to_nptensor(path, max_files=20, out_file='out_put'):
     files = find_midi_path(path)
     chunks_X = None
@@ -87,9 +112,9 @@ def convert_array_to_nptensor(path, max_files=20, out_file='out_put'):
         file = files[file_idx]
         print('Processing: ', (file_idx+1),'/',num_files)
         print('File information: ', file)
-        X = midi_to_single_array1(file)
+        X = midi_to_single_array2(file)
         Y = X[1:]
-        Y = np.append(Y,np.zeros([1,128,1]),axis=0)
+        Y = np.append(Y,np.zeros([1,1,4]),axis=0)
         cur_seq = 0
         total_seq = len(X)
         print('Total sequence number:',total_seq)
@@ -105,29 +130,6 @@ def convert_array_to_nptensor(path, max_files=20, out_file='out_put'):
             chunks_Y = np.append(chunks_Y, Y, axis = 0)
 
 
-    num_examples = int(np.round(len(chunks_X)/num_files))
-    out_shape = (num_examples, 128, 1)
-    x_data = np.zeros(out_shape)
-    y_data = np.zeros(out_shape)
-    for n in range(num_examples):
-        for i in range(20):
-            x_data[n][i] = chunks_X[n][i]
-            y_data[n][i] = chunks_Y[n][i]
-        print('Saved example ', (n+1), ' / ',num_examples)
-    print('Flushing to disk...')
-
-    mean_x = x_data.mean(axis = (0,1)) # Mean of all data
-    std_x = x_data.std(axis = (0,1)) # Std of all data
-    std_x = np.maximum(1.0e-8, std_x) #Clamp variance if too tiny
-
-
-    x_data[:][:] -= mean_x #Mean 0
-    x_data[:][:] /= std_x #Variance 1
-    y_data[:][:] -= mean_x #Mean 0
-    y_data[:][:] /= std_x #Variance 1
-
-    np.save(out_file+'_mean', mean_x)
-    np.save(out_file+'_var', std_x)
-    np.save(out_file+'_x', x_data)
-    np.save(out_file+'_y', y_data)
+    np.save('data_x', chunks_X)
+    np.save('data_y', chunks_Y)
     print('Done!')

@@ -3,14 +3,10 @@ import numpy as np
 import mido
 import os
 
-# mid = mido.MidiFile('1.mid')
 
-
+# get the path of the midi files
 path = os.getcwd()+'/audio_resources'
-#midi_files  = parser.find_midi_path(path)
 
-#for n in midi_files:
-    #print(parser.midi_to_single_array(n).shape)
+# convert all the data into np and store it locally
+parser.convert_array_to_nptensor(path)
 
-a = parser.convert_array_to_nptensor(path)
-print(a[0][0])
