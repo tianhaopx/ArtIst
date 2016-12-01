@@ -16,3 +16,9 @@ def create_lstm_network():
     model.add(TimeDistributed(Dense(input_dim=256,output_dim=128)))
     model.compile(loss='mean_squared_error', optimizer='rmsprop', metrics=['accuracy'])
     return model
+
+def new_lstm_network(input_dim, output_dim):
+    model = Sequential()
+    model.add(LSTM(input_dim=input_dim, output_dim=output_dim, activation='sigmoid', return_sequences=False))
+    model.compile(loss='binary_crossentropy', optimizer='adam', class_mode='binary', metrics=['accuracy'])
+    return model
