@@ -6,7 +6,6 @@ from keras.callbacks import ModelCheckpoint
 
 #Load training data
 print('Loading training data')
-inputFile = 'out_put'
 X = np.load('data_x.npy')
 y = np.load('data_y.npy')
 print('Finished loading training data')
@@ -17,7 +16,7 @@ output_dim = y.shape[1]
 save_path = os.getcwd()+'/Model_Weight/Weight.{epoch:02d}.hdf5'
 #print(save_path)
 
-model = network_utils.new_lstm_network(input_dim, output_dim)
+model = network_utils.new_lstm_network()
 # You can use this line to see what the model lokks like
 # model.summary()
 

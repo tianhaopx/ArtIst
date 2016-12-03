@@ -16,7 +16,6 @@ def to_piano_roll(midi):
     tempo = 500000  # Assume same default tempo and 4/4 for all MIDI files.
     seconds_per_beat = tempo / 1000000.0
     seconds_per_tick = seconds_per_beat / midi.ticks_per_beat
-    print(midi.ticks_per_beat)
     velocities = np.zeros(notes)
     sequence = []
     for m in midi:
@@ -33,6 +32,51 @@ def to_piano_roll(midi):
     piano_roll = np.array(sequence)
     return piano_roll
 
+
+def New_fromMidiCreatePianoRoll(midi_files,ticks):
+    num_files = len(midi_files)
+    piano_roll = np.zeros((num_files, ticks, 128), dtype=np.float32)
+    for i, mid in enumerate(midi_files):
+        note_on_length = to_piano_roll(mid)
+        piano_roll[i] = note_on_length[0:ticks]
+    return piano_roll
+
+def New_getTicks(midi_files):
+    ticks = []
+    for mid in midi_files:
+        for track in mid.tracks: #preprocessing: Checking range of notes and total number of ticks
+            num_ticks = 0
+            for message in track:
+                if message.type in ['note_on','note_off']:
+                    num_ticks += int(message.time)
+            if num_ticks != 0:
+                ticks.append(num_ticks)
+    return min(ticks)
+
+
+def New_fromMidiCreatePianoRoll(midi_files,ticks):
+    num_files = len(midi_files)
+    piano_roll = np.zeros((num_files, ticks, 128), dtype=np.float32)
+
+    for i, mid in enumerate(midi_files):
+        note_on_length = to_piano_roll(mid)
+        piano_roll[i] = note_on_length[0:ticks]
+    return piano_roll
+
+
+def New_midi_tensor():
+    path1 = os.getcwd()+'/audio_resources/train'
+    path2 = os.getcwd()+'/audio_resources/test'
+    a = find_midi_path(path1)
+    b = find_midi_path(path2)
+    ticks = New_getTicks(a)
+    X = New_fromMidiCreatePianoRoll(a,ticks)
+    y = New_fromMidiCreatePianoRoll(b,ticks)
+    print(X.shape)
+    print(y.shape)
+    np.save('data_x',X)
+    np.save('data_y',y)
+    print('Done!')
 
 # find all the midi files reture its file path
 # and convert it into mido examples
@@ -122,12 +166,13 @@ def createNetInputs(roll, target, seq_length=1):
 
     return np.array(X), np.array(y)
 
-def midi_tensor(train_path,target_path):
+def midi_tensor(train_path,test_path):
     train_midi_files = find_midi_path(train_path)
-    target_midi_files = find_midi_path(target_path)
-    ticks = getTicks(train_midi_files)
+    test_midi_files = find_midi_path(test_path)
+    ticks_train = getTicks(train_midi_files)
+    ticks_test = getTicks(test_midi_files)
     X = fromMidiCreatePianoRoll(train_midi_files,ticks)
-    y = fromMidiCreatePianoRoll(target_midi_files,ticks)
+    y = fromMidiCreatePianoRoll(test_midi_files,ticks_test)
     X, y = createNetInputs(X,y)
     np.save('data_x',X)
     np.save('data_y',y)
@@ -135,12 +180,13 @@ def midi_tensor(train_path,target_path):
 
 # this is wrong?
 # I think it has to be changed
-def NetOutToPianoRoll(network_output, threshold=0.1):
+def NetOutToPianoRoll(network_output, threshold=0.1, chord_threshold=1e-5):
     piano_roll = []
     for i, timestep in enumerate(network_output):
         if np.amax(timestep) > threshold:
             pos = 0
             pos = np.argmax(timestep)
+            # pos = np.argwhere(timestep >= np.amax(timestep)-chord_threshold)
             timestep[:] = np.zeros(timestep.shape)
             timestep[pos] = 1
         else:
@@ -153,9 +199,9 @@ def NetOutToPianoRoll(network_output, threshold=0.1):
 # if we use the old way
 # this function will make the song extremely long
 # gotta make some changes
-def createMidiFromPianoRoll(piano_roll, directory=os.getcwd(), mel_test_file='_test', threshold=0.1, resres_factor=12):
+def createMidiFromPianoRoll(piano_roll, directory=os.getcwd(), mel_test_file='_test', threshold=0.1):
 
-    ticks_per_beat = int(96/resres_factor)
+    ticks_per_beat = int(180)
     mid = MidiFile(type=0, ticks_per_beat=ticks_per_beat)
     track = MidiTrack()
     mid.tracks.append(track)
@@ -182,11 +228,11 @@ def createMidiFromPianoRoll(piano_roll, directory=os.getcwd(), mel_test_file='_t
 
                 if piano_roll[j+1, k] == 1 and piano_roll[j, k] == 0:
                     set_note += 1
-                    track.append(Message('note_on', note=k, velocity=100, time=time))
+                    track.append(Message('note_on', note=k, velocity=120, time=time))
                 if piano_roll[j+1, k] == 0 and piano_roll[j, k] == 1:
                     set_note += 1
-                    track.append(Message('note_off', note=k, velocity=64, time=time))
-    print(directory)
+                    track.append(Message('note_off', note=k, velocity=120, time=time))
+
     mid.save('%s%s_th%s.mid' %(directory, mel_test_file, threshold))
     mid_files.append('%s.mid' %(mel_test_file))
 

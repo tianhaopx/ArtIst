@@ -19,10 +19,9 @@ def create_lstm_network():
 
 # Add the drop out layer
 # this lstm nn is proved can work
-def new_lstm_network(input_dim, output_dim):
+def new_lstm_network():
     model = Sequential()
-    model.add(LSTM(input_dim=input_dim, output_dim=output_dim, activation='sigmoid', return_sequences=False))
-    model.add(Dropout(0.2))
-    #model.add(TimeDistributed(Dense(1)))
+    model.add(LSTM(input_dim=128, output_dim=128, activation='sigmoid', return_sequences=True))
+    # model.add(Dropout(0.2))
     model.compile(loss='binary_crossentropy', optimizer='adam', class_mode='binary', metrics=['accuracy'])
     return model
