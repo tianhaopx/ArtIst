@@ -118,7 +118,7 @@ def NetOutToPianoRoll(network_output, threshold=0.1):
     return np.array(piano_roll)
 
 
-def createMidiFromPianoRoll(piano_roll, directory=os.getcwd(), mel_test_file='test', threshold=1, res_factor=12):
+def createMidiFromPianoRoll(piano_roll, directory=os.getcwd(), mel_test_file='_test', threshold=0.1, res_factor=12):
 
     ticks_per_beat = int(96/res_factor)
     mid = MidiFile(type=0, ticks_per_beat=ticks_per_beat)
