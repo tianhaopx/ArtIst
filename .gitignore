@@ -94,6 +94,6 @@ ENV/
 .DS_Store
 
 # Model Weight
-.hdf5
-.ipynb
-.npy
+Model_Weight/
+*.ipynb
+*.npy
