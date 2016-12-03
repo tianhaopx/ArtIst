@@ -4,6 +4,36 @@ import mido
 from mido import MidiFile, MidiTrack, Message
 from mido import MetaMessage
 
+# This seems to be a better version for us I think
+# Afterall I don't know what hell is Resolution Factors
+# this return all the ticks
+# but somehow it runs faster than with the res_factor
+# if use this one
+# the getTicks res_factor has to be set to 1
+def to_piano_roll(midi):
+    """Convert MIDI file to a 2D NumPy ndarray (notes, timesteps)."""
+    notes = 128
+    tempo = 500000  # Assume same default tempo and 4/4 for all MIDI files.
+    seconds_per_beat = tempo / 1000000.0
+    seconds_per_tick = seconds_per_beat / midi.ticks_per_beat
+    print(midi.ticks_per_beat)
+    velocities = np.zeros(notes)
+    sequence = []
+    for m in midi:
+        if m.type in ['note_on','note_off']:
+            ticks = int(np.round(m.time / seconds_per_tick))
+            ls = [velocities.copy()] *ticks
+            sequence.extend(ls)
+            if m.type == 'note_on':
+                velocities[m.note] = 1
+            elif m.type == 'note_off':
+                velocities[m.note] = 0
+            else:
+                continue
+    piano_roll = np.array(sequence)
+    return piano_roll
+
+
 # find all the midi files reture its file path
 # and convert it into mido examples
 def find_midi_path(path):
@@ -15,25 +45,25 @@ def find_midi_path(path):
 
 
 # we only need a array with notes on!
-def getTicks(midi_files,_factor=12):
+def getTicks(midi_files,res_factor=12):
     ticks = []
     for mid in midi_files:
         for track in mid.tracks: #preprocessing: Checking range of notes and total number of ticks
             num_ticks = 0
             for message in track:
                 if message.type in ['note_on','note_off']:
-                    num_ticks += int(message.time/_factor)
+                    num_ticks += int(message.time/res_factor)
             ticks.append(num_ticks)
     return max(ticks)
 
 # first we get a array with notes on and off
-def getNoteTimeOnOffArray(mid,_factor=12):
+def getNoteTimeOnOffArray(mid,res_factor=12):
     note_time_onoff_array = []
     for track in mid.tracks:
         current_time = 0
         for message in track:
             if message.type in ['note_on','note_off']:
-                current_time += int(message.time/_factor)
+                current_time += int(message.time/res_factor)
                 if message.type == 'note_on':
                     note_onoff = 1
                 elif message.type == 'note_off':
@@ -61,7 +91,6 @@ def getNoteOnLengthArray(note_time_onoff_array):
 # now we combine everything together
 def fromMidiCreatePianoRoll(midi_files, ticks):
     num_files = len(midi_files)
-
     piano_roll = np.zeros((num_files, ticks, 128), dtype=np.float32)
 
     for i, mid in enumerate(midi_files):
@@ -72,7 +101,9 @@ def fromMidiCreatePianoRoll(midi_files, ticks):
     return piano_roll
 
 # change seq_length!!!!!
-def createNetInputs(roll, target, seq_length=3072):
+# this part roll and target must have the same sample size?
+# I'm not sure about this thing
+def createNetInputs(roll, target, seq_length=1):
     #roll: 3-dim array with Midi Files as piano roll. Size: (num_samples=num Midi Files, num_timesteps, num_notes)
     #seq_length: Sequence Length. Length of previous played notes in regard of the current note that is being trained on
     #seq_length in Midi Ticks. Default is 96 ticks per beat --> 3072 ticks = 8 Bars
@@ -102,7 +133,8 @@ def midi_tensor(train_path,target_path):
     np.save('data_y',y)
     print('Done!')
 
-
+# this is wrong?
+# I think it has to be changed
 def NetOutToPianoRoll(network_output, threshold=0.1):
     piano_roll = []
     for i, timestep in enumerate(network_output):
@@ -117,10 +149,13 @@ def NetOutToPianoRoll(network_output, threshold=0.1):
 
     return np.array(piano_roll)
 
+# so does it!
+# if we use the old way
+# this function will make the song extremely long
+# gotta make some changes
+def createMidiFromPianoRoll(piano_roll, directory=os.getcwd(), mel_test_file='_test', threshold=0.1, resres_factor=12):
 
-def createMidiFromPianoRoll(piano_roll, directory=os.getcwd(), mel_test_file='_test', threshold=0.1, res_factor=12):
-
-    ticks_per_beat = int(96/res_factor)
+    ticks_per_beat = int(96/resres_factor)
     mid = MidiFile(type=0, ticks_per_beat=ticks_per_beat)
     track = MidiTrack()
     mid.tracks.append(track)

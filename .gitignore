@@ -92,3 +92,8 @@ ENV/
 
 # Mac
 .DS_Store
+
+# Model Weight
+.hdf5
+.ipynb
+.npy
