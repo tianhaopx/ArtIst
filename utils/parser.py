@@ -4,6 +4,23 @@ import mido
 from mido import MidiFile, MidiTrack, Message
 from mido import MetaMessage
 
+
+# find all the midi files reture its file path
+# and convert it into mido examples
+def find_midi_path(path):
+    files = os.listdir(path)
+    files_path = [mido.MidiFile(path+'/'+n) if n.endswith('.mid') else None for n in files]
+    while None in files_path:
+        files_path.remove(None)
+    return files_path
+
+
+
+#=================================================================
+
+
+
+#=================================================================
 # This seems to be a better version for us I think
 # Afterall I don't know what hell is Resolution Factors
 # this return all the ticks
@@ -78,15 +95,11 @@ def New_midi_tensor():
     np.save('data_y',y)
     print('Done!')
 
-# find all the midi files reture its file path
-# and convert it into mido examples
-def find_midi_path(path):
-    files = os.listdir(path)
-    files_path = [mido.MidiFile(path+'/'+n) if n.endswith('.mid') else None for n in files]
-    while None in files_path:
-        files_path.remove(None)
-    return files_path
+#=================================================================
 
+
+
+#=================================================================
 
 # we only need a array with notes on!
 def getTicks(midi_files,res_factor=12):
@@ -177,6 +190,20 @@ def midi_tensor(train_path,test_path):
     np.save('data_x',X)
     np.save('data_y',y)
     print('Done!')
+
+
+
+
+
+#=================================================================
+
+
+
+#=================================================================
+
+
+
+
 
 # this is wrong?
 # I think it has to be changed
