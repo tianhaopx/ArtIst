@@ -1,235 +1,266 @@
-# USING THIS FUNCTION IN THE ROOT OF YOUR PROJECT
 import os
-import scipy.io.wavfile as wav
-from pipes import quote
 import numpy as np
-import config
+import mido
+from mido import MidiFile, MidiTrack, Message
+from mido import MetaMessage
 
 
-# find all the mp3 files reture its file path
-def find_all_the_mp3(path):
+# find all the midi files reture its file path
+# and convert it into mido examples
+def find_midi_path(path):
     files = os.listdir(path)
-    files_path = [path+'/'+n for n in files]
+    files_path = [mido.MidiFile(path+'/'+n) if n.endswith('.mid') else None for n in files]
+    while None in files_path:
+        files_path.remove(None)
     return files_path
 
-# We first convert a MP3 file into WAV
-def convert_mp3_to_wav(file_path, sample_frequency):
-    path = '/'.join(file_path.split('/')[0:-2])
-    filename = file_path.split('/')[-1]
-    temp_file_path = path+'/tmp/'
-    new_file_path = path+'/wav/'
-    if not os.path.exists(temp_file_path):
-        os.makedirs(temp_file_path)
-    if not os.path.exists(new_file_path):
-        os.makedirs(new_file_path)
-    temp_file_name = temp_file_path + filename
-    new_file_name = new_file_path + filename.split('.')[0]+'.wav'
-    sample_freq_str = "{0:.1f}".format(float(sample_frequency)/1000.0)
-    cmd = 'lame -a -m m {0} {1}'.format(quote(file_path), quote(temp_file_name))
-    os.system(cmd)
-    cmd = 'lame --decode {0} {1} --resample {2}'.format(quote(temp_file_name), quote(new_file_name), sample_freq_str)
-    os.system(cmd)
-    return new_file_name
+
+
+#=================================================================
 
 
 
-# read the WAV file into np
-# Open a WAV file
-# Return the sample rate (in samples/sec) and data from a WAV file.
-def read_wav_as_np(filename):
-    path = os.getcwd()+'/audio_sources/wav/'
-    files = os.listdir(path)
-    if filename not in files:
-        return "Cannot find files"
-    data = wav.read(path+filename)
-    np_arr = data[1].astype('float32') / 32767.0 #Normalize 16-bit input to [-1, 1] range
-    np_arr = np.array(np_arr)
-    return np_arr, data[0]
+#=================================================================
+# This seems to be a better version for us I think
+# Afterall I don't know what hell is Resolution Factors
+# this return all the ticks
+# but somehow it runs faster than with the res_factor
+# if use this one
+# the getTicks res_factor has to be set to 1
+def to_piano_roll(midi):
+    """Convert MIDI file to a 2D NumPy ndarray (notes, timesteps)."""
+    notes = 128
+    tempo = 500000  # Assume same default tempo and 4/4 for all MIDI files.
+    seconds_per_beat = tempo / 1000000.0
+    seconds_per_tick = seconds_per_beat / midi.ticks_per_beat
+    velocities = np.zeros(notes)
+    sequence = []
+    for m in midi:
+        if m.type in ['note_on','note_off']:
+            ticks = int(np.round(m.time / seconds_per_tick))
+            ls = [velocities.copy()] *ticks
+            sequence.extend(ls)
+            if m.type == 'note_on':
+                velocities[m.note] = 1
+            elif m.type == 'note_off':
+                velocities[m.note] = 0
+            else:
+                continue
+    piano_roll = np.array(sequence)
+    return piano_roll
 
 
-# A piece of music can be interpret as the combination of
-# Time Domain and Frequence Domain
-# convert np into sample block
-def convert_np_audio_to_sample_blocks(song_np, block_size):
-    block_lists = []
-    total_samples = song_np.shape[0]
-    num_samples_so_far = 0
-    while(num_samples_so_far < total_samples):
-        block = song_np[num_samples_so_far:num_samples_so_far+block_size]
-        if(block.shape[0] < block_size):
-            padding = np.zeros((block_size - block.shape[0],))
-            block = np.concatenate((block, padding))
-        block_lists.append(block)
-        num_samples_so_far += block_size
-    return block_lists
+def New_fromMidiCreatePianoRoll(midi_files,ticks):
+    num_files = len(midi_files)
+    piano_roll = np.zeros((num_files, ticks, 128), dtype=np.float32)
+    for i, mid in enumerate(midi_files):
+        note_on_length = to_piano_roll(mid)
+        piano_roll[i] = note_on_length[0:ticks]
+    return piano_roll
+
+def New_getTicks(midi_files):
+    ticks = []
+    for mid in midi_files:
+        for track in mid.tracks: #preprocessing: Checking range of notes and total number of ticks
+            num_ticks = 0
+            for message in track:
+                if message.type in ['note_on','note_off']:
+                    num_ticks += int(message.time)
+            if num_ticks != 0:
+                ticks.append(num_ticks)
+    return min(ticks)
+
+
+def New_fromMidiCreatePianoRoll(midi_files,ticks):
+    num_files = len(midi_files)
+    piano_roll = np.zeros((num_files, ticks, 128), dtype=np.float32)
+
+    for i, mid in enumerate(midi_files):
+        note_on_length = to_piano_roll(mid)
+        piano_roll[i] = note_on_length[0:ticks]
+    return piano_roll
+
+
+def New_midi_tensor():
+    path1 = os.getcwd()+'/audio_resources/train'
+    path2 = os.getcwd()+'/audio_resources/test'
+    a = find_midi_path(path1)
+    b = find_midi_path(path2)
+    ticks = New_getTicks(a)
+    X = New_fromMidiCreatePianoRoll(a,ticks)
+    y = New_fromMidiCreatePianoRoll(b,ticks)
+    print(X.shape)
+    print(y.shape)
+    np.save('data_x',X)
+    np.save('data_y',y)
+    print('Done!')
+
+#=================================================================
 
 
 
-# https://zhuanlan.zhihu.com/p/19763358?columnSlug=wille
-# read about this article!
-# this function we use fast fourier to transfer time domain block
-# 总的来说，傅里叶变换告诉你，在一个整体的波形中，每一个单独的“音符”（正弦曲线或是圆圈）的比例
-# 对于每个音频片段，傅里叶变换将音频波形分解为它的成分音符并且保存下来，从而代替存储原始波形。
-# http://blog.jobbole.com/51301/
-def time_blocks_to_fft_blocks(blocks_time_domain):
-    fft_blocks = []
-    for block in blocks_time_domain:
-        fft_block = np.fft.fft(block)
-        new_block = np.concatenate((np.real(fft_block), np.imag(fft_block)))
-        fft_blocks.append(new_block)
-    return fft_blocks
+#=================================================================
 
+# we only need a array with notes on!
+def getTicks(midi_files,res_factor=12):
+    ticks = []
+    for mid in midi_files:
+        for track in mid.tracks: #preprocessing: Checking range of notes and total number of ticks
+            num_ticks = 0
+            for message in track:
+                if message.type in ['note_on','note_off']:
+                    num_ticks += int(message.time/res_factor)
+            ticks.append(num_ticks)
+    return max(ticks)
 
-# Loading the np and fft
-def load_training_example(filename, block_size=2048, useTimeDomain=False):
-    data, bitrate = read_wav_as_np(filename)
-    # x_t is input and y_t is output
-    x_t = convert_np_audio_to_sample_blocks(data, block_size)
-    # except first row
-    y_t = x_t[1:]
-    #Add special end block composed of all zeros
-    y_t.append(np.zeros(block_size))
+# first we get a array with notes on and off
+def getNoteTimeOnOffArray(mid,res_factor=12):
+    note_time_onoff_array = []
+    for track in mid.tracks:
+        current_time = 0
+        for message in track:
+            if message.type in ['note_on','note_off']:
+                current_time += int(message.time/res_factor)
+                if message.type == 'note_on':
+                    note_onoff = 1
+                elif message.type == 'note_off':
+                    note_onoff = 0
+                else:
+                    print("Error: Note Type not recognized!")
 
-    if useTimeDomain:
-        return x_t, y_t
+                note_time_onoff_array.append([message.note, current_time, note_onoff])
+    return note_time_onoff_array
 
-    X = time_blocks_to_fft_blocks(x_t)
-    Y = time_blocks_to_fft_blocks(y_t)
-    return X, Y
+# now we filter the notes off
+# and replace the on/off with the notes length
+def getNoteOnLengthArray(note_time_onoff_array):
+    note_on_length_array = []
+    for i, message in enumerate(note_time_onoff_array):
+        if message[2] == 1: #if note type is 'note_on'
+            start_time = message[1]
+            for event in note_time_onoff_array[i:]: #go through array and look for, when the current note is getting turned off
+                if event[0] == message[0] and event[2] == 0:
+                    length = event[1] - start_time
+                    break
+            note_on_length_array.append([message[0], start_time, length])
+    return note_on_length_array
 
-# transfer the file into npy
-# before you run this function
-# you need to make sure there are WAV files
-def convert_wav_files_to_nptensor(block_size, max_seq_len, out_file, max_files=20, useTimeDomain=False):
-    files = []
-    directory = os.getcwd()+'/audio_sources/wav'
+# now we combine everything together
+def fromMidiCreatePianoRoll(midi_files, ticks):
+    num_files = len(midi_files)
+    piano_roll = np.zeros((num_files, ticks, 128), dtype=np.float32)
 
-    # read WAV file from directory
-    for file in os.listdir(directory):
-        if file.endswith('.wav'):
-            files.append(file)
-    chunks_X = []
-    chunks_Y = []
-    num_files = len(files)
+    for i, mid in enumerate(midi_files):
+        note_time_onoff = getNoteTimeOnOffArray(mid)
+        note_on_length = getNoteOnLengthArray(note_time_onoff)
+        for message in note_on_length:
+            piano_roll[i, message[1]:(message[1]+int(message[2]/2)), message[0]] = 1
+    return piano_roll
 
-    # limited the source files number
-    if(num_files > max_files):
-        num_files = max_files
+# change seq_length!!!!!
+# this part roll and target must have the same sample size?
+# I'm not sure about this thing
+def createNetInputs(roll, target, seq_length=1):
+    #roll: 3-dim array with Midi Files as piano roll. Size: (num_samples=num Midi Files, num_timesteps, num_notes)
+    #seq_length: Sequence Length. Length of previous played notes in regard of the current note that is being trained on
+    #seq_length in Midi Ticks. Default is 96 ticks per beat --> 3072 ticks = 8 Bars
 
+    # i --- sample
+    # song ------matrix
+    X = []
+    y = []
+    for i, song in enumerate(roll):
+        pos = 0
+        while pos+seq_length < song.shape[0]:
+            sequence = np.array(song[pos:pos+seq_length])
+            X.append(sequence)
+            y.append(target[i, pos+seq_length])
+            pos += 1
 
-    for file_idx in range(num_files):
-        file = files[file_idx]
-        print('Processing: ', (file_idx+1),'/',num_files)
-        print('Filename: ', file)
-        X, Y = load_training_example(file, block_size, useTimeDomain=useTimeDomain)
-        cur_seq = 0
-        total_seq = len(X)
-        print('Total sequence number:',total_seq)
-        print('Max sequence length:',max_seq_len)
-        while cur_seq + max_seq_len < total_seq:
-            chunks_X.append(X[cur_seq:cur_seq+max_seq_len])
-            chunks_Y.append(Y[cur_seq:cur_seq+max_seq_len])
-            cur_seq += max_seq_len
+    return np.array(X), np.array(y)
 
-
-    num_examples = len(chunks_X)
-    num_dims_out = block_size * 2
-    if(useTimeDomain):
-        num_dims_out = block_size
-    out_shape = (num_examples, max_seq_len, num_dims_out)
-    x_data = np.zeros(out_shape)
-    y_data = np.zeros(out_shape)
-    for n in range(num_examples):
-        for i in range(max_seq_len):
-            x_data[n][i] = chunks_X[n][i]
-            y_data[n][i] = chunks_Y[n][i]
-        print('Saved example ', (n+1), ' / ',num_examples)
-    print('Flushing to disk...')
-
-    mean_x = x_data.mean(axis = (0,1)) # Mean of all data
-    std_x = x_data.std(axis = (0,1)) # Std of all data
-    std_x = np.maximum(1.0e-8, std_x) #Clamp variance if too tiny
-
-
-    x_data[:][:] -= mean_x #Mean 0
-    x_data[:][:] /= std_x #Variance 1
-    y_data[:][:] -= mean_x #Mean 0
-    y_data[:][:] /= std_x #Variance 1
-
-    np.save(out_file+'_mean', mean_x)
-    np.save(out_file+'_var', std_x)
-    np.save(out_file+'_x', x_data)
-    np.save(out_file+'_y', y_data)
+def midi_tensor(train_path,test_path):
+    train_midi_files = find_midi_path(train_path)
+    test_midi_files = find_midi_path(test_path)
+    ticks_train = getTicks(train_midi_files)
+    ticks_test = getTicks(test_midi_files)
+    X = fromMidiCreatePianoRoll(train_midi_files,ticks)
+    y = fromMidiCreatePianoRoll(test_midi_files,ticks_test)
+    X, y = createNetInputs(X,y)
+    np.save('data_x',X)
+    np.save('data_y',y)
     print('Done!')
 
 
-def convert_sample_blocks_to_np_audio(blocks):
-    song_np = np.concatenate(blocks)
-    return song_np
+
+
+
+#=================================================================
+
+
+
+#=================================================================
 
 
 
 
-# convert the fast fourier block into the original time domain block
-def fft_blocks_to_time_blocks(blocks_ft_domain):
-    time_blocks = []
-    for block in blocks_ft_domain:
-        '''
-        num_elems = block.shape[0]/2
-        real_chunk = block[0:num_elems]
-        imag_chunk = block[num_elems:]
-        new_block = real_chunk + 1.0j * imag_chunk
-        time_block = np.fft.ifft(new_block)
-        time_blocks.append(time_block)
-        '''
-        time_blocks.append(np.fft.ifft(block))
-    return time_blocks
+
+# this is wrong?
+# I think it has to be changed
+def NetOutToPianoRoll(network_output, threshold=0.1, chord_threshold=1e-5):
+    piano_roll = []
+    for i, timestep in enumerate(network_output):
+        if np.amax(timestep) > threshold:
+            pos = 0
+            pos = np.argmax(timestep)
+            # pos = np.argwhere(timestep >= np.amax(timestep)-chord_threshold)
+            timestep[:] = np.zeros(timestep.shape)
+            timestep[pos] = 1
+        else:
+            timestep[:] = np.zeros(timestep.shape)
+        piano_roll.append(timestep)
+
+    return np.array(piano_roll)
+
+# so does it!
+# if we use the old way
+# this function will make the song extremely long
+# gotta make some changes
+def createMidiFromPianoRoll(piano_roll, directory=os.getcwd(), mel_test_file='_test', threshold=0.1):
+
+    ticks_per_beat = int(180)
+    mid = MidiFile(type=0, ticks_per_beat=ticks_per_beat)
+    track = MidiTrack()
+    mid.tracks.append(track)
+
+    mid_files = []
 
 
-# convert np into wav file
-def write_np_as_wav(X, sample_rate, filename):
-    Xnew = X * 32767.0
-    Xnew = Xnew.astype('int16')
-    wav.write(filename, sample_rate, Xnew)
+    delta_times = [0]
+    for k in range(piano_roll.shape[1]):#initial starting values
+        if piano_roll[0, k] == 1:
+            track.append(Message('note_on', note=k, velocity=100, time=0))
+            delta_times.append(0)
+
+    for j in range(piano_roll.shape[0]-1):#all values between first and last one
+        set_note = 0 #Check, if for the current timestep a note has already been changed (set to note_on or note_off)
+
+        for k in range(piano_roll.shape[1]):
+            if (piano_roll[j+1, k] == 1 and piano_roll[j, k] == 0) or (piano_roll[j+1, k] == 0 and piano_roll[j, k] == 1):#only do something if note_on or note_off are to be set
+                if set_note == 0:
+                    time = j+1 - sum(delta_times)
+                    delta_times.append(time)
+                else:
+                    time = 0
+
+                if piano_roll[j+1, k] == 1 and piano_roll[j, k] == 0:
+                    set_note += 1
+                    track.append(Message('note_on', note=k, velocity=120, time=time))
+                if piano_roll[j+1, k] == 0 and piano_roll[j, k] == 1:
+                    set_note += 1
+                    track.append(Message('note_off', note=k, velocity=120, time=time))
+
+    mid.save('%s%s_th%s.mid' %(directory, mel_test_file, threshold))
+    mid_files.append('%s.mid' %(mel_test_file))
+
     return
-
-
-def save_generated_example(filename, generated_sequence, useTimeDomain=False, sample_frequency=44100):
-    if useTimeDomain:
-        time_blocks = generated_sequence
-    else:
-        time_blocks = fft_blocks_to_time_blocks(generated_sequence)
-        print(time_blocks)
-    song = convert_sample_blocks_to_np_audio(time_blocks)
-    write_np_as_wav(song, sample_frequency, filename)
-    return
-
-def convert_nptensor_to_wav_files(tensor, indices, filename, useTimeDomain=False):
-    num_seqs = tensor.shape[1]
-    for i in indices:
-        chunks = []
-        for x in range(num_seqs):
-            chunks.append(tensor[i][x])
-        save_generated_example(filename+str(i)+'.wav', chunks,useTimeDomain=useTimeDomain)
-
-
-
-# 44100 frequence
-# block size 2048
-# convert_mp3_to_wav('1.mp3',44100)
-# a = read_wav_as_np('1.wav')
-# b = convert_np_audio_to_sample_blocks(a[0],2048)
-# c = b[1:]
-# c.append(np.zeros(2048))
-# print(c)
-# print(load_training_example('test.wav')[1])
-
-# convert_wav_files_to_nptensor(2048,20,'test')
-'''
-conf = config.config()
-sampling_freq = conf['sampling_freq']
-path_to_audio_source = os.getcwd() + '/audio_sources'
-files = find_all_the_mp3(path_to_audio_source+'/mp3')
-for n in files:
-    convert_mp3_to_wav(n,sampling_freq)
-'''

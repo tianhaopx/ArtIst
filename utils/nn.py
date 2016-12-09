@@ -1,23 +1,27 @@
 from keras.models import Sequential
-from keras.layers.core import Dense
+from keras.layers.core import Dense, Dropout
 from keras.layers.wrappers import TimeDistributed
 from keras.layers.recurrent import LSTM
 
-# shape(sameple_size,sample_row,sample_column)
-def create_lstm_network(num_frequency_vectores, num_frequency_dimensions, num_hidden_dimensions, num_recurrent_units=1):
-
-    # create sequential
+# 2000 and 4
+# 2000 is the hidden layers and 4 is the dimension of our own data
+# these two numbers are really important
+def create_lstm_network():
     model = Sequential()
+    # This layer converts frequency space to hidden space
+    model.add(LSTM(256, input_dim=128,return_sequences=True))
+    for cur_unit in range(2):
+        model.add(LSTM(256, return_sequences=True))
+    # This layer converts hidden space back to frequency space
+    model.add(TimeDistributed(Dense(input_dim=256,output_dim=128)))
+    model.compile(loss='mean_squared_error', optimizer='rmsprop', metrics=['accuracy'])
+    return model
 
-    #This layer converts frequency space to hidden space
-    # http://keras-cn.readthedocs.io/en/latest/layers/core_layer/
-    # http://keras-cn.readthedocs.io/en/latest/layers/wrapper/
-    model.add(TimeDistributed(Dense(num_hidden_dimensions),input_shape=(num_frequency_vectores,num_frequency_dimensions)))
-
-    for cur_unit in range(num_recurrent_units):
-        model.add(LSTM(input_dim=num_hidden_dimensions, output_dim=num_hidden_dimensions, return_sequences=True))
-
-    #This layer converts hidden space back to frequency space
-    model.add(TimeDistributed(Dense(num_frequency_dimensions)))
-    model.compile(loss='mean_squared_error', optimizer='rmsprop')
+# Add the drop out layer
+# this lstm nn is proved can work
+def new_lstm_network():
+    model = Sequential()
+    model.add(LSTM(input_dim=128, output_dim=128, activation='sigmoid', return_sequences=True))
+    # model.add(Dropout(0.2))
+    model.compile(loss='binary_crossentropy', optimizer='adam', class_mode='binary', metrics=['accuracy'])
     return model
