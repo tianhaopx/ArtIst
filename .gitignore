@@ -97,3 +97,7 @@ ENV/
 Model_Weight/
 *.ipynb
 *.npy
+.idea
+backup
+*.wav
+*.png
