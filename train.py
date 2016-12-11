@@ -27,7 +27,7 @@ saver = ModelCheckpoint(save_path,
 
 # the parameter here can be changed due to the differernt setting of the PC
 model.fit(X, y,
-          batch_size=128, nb_epoch=100, verbose=1,
+          batch_size=128, nb_epoch=300, verbose=1,
           validation_split=0.0, callbacks=[saver])
 # Save the final model Weight
 # This line is useless since we get saver above

@@ -1,6 +1,4 @@
 from utils import parser
-import numpy as np
-import mido
 import os
 
 
